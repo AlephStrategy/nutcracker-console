@@ -1,0 +1,17 @@
+# Virtual environments
+env/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# User-specific config
+console_config.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local dev launchers
+run_local_dev.bat
