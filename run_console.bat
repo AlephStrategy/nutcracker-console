@@ -14,4 +14,4 @@ REM Install dependencies
 pip install -r requirements.txt
 
 REM Launch console
-streamlit run app\console.py
+streamlit run app\streamlit_app.py
