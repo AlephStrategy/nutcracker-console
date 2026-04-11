@@ -50,6 +50,16 @@ if "last_fail" not in st.session_state:
 if "force_refresh" not in st.session_state:
     st.session_state.force_refresh = 0
 
+if "bot_initialized" not in st.session_state:
+    st.session_state.bot_initialized = False
+
+if "bot_initializing" not in st.session_state:
+    st.session_state.bot_initializing = False
+
+if "ui_synced" not in st.session_state:
+    st.session_state.ui_synced = False
+
+
 config_local = load_config()
 access_key = config_local.get("access_key", None)
 
@@ -172,6 +182,7 @@ if not st.session_state.connected:
     st.warning("Not connected to bot server.")
     if st.button("Connect to Bot Server", key="btn_connect"):
         st.session_state.connected = True
+        st.session_state.ui_synced = False
         st.rerun()
     st.stop()
 # -----------------------------
@@ -180,25 +191,43 @@ if not st.session_state.connected:
 status = fetch_status()   # {"bot_state": "...", "bot_attached": ...}
 bot_state = status.get("bot_state", "offline")
 bot_attached = status.get("bot_attached", False)
-# ---------------------------------------------
-# Auto-initialize bot if keys exist but bot is uninitialized
-# ---------------------------------------------
-if bot_state == "uninitialized":
-    r = safe_request(requests.get, f"{API_URL}/exchange_status")
-    if r:
-        ex = r.json()
-        if ex.get("keys_loaded"):
-            # Keys exist → initialize bot automatically
-            init = safe_request(requests.post, f"{API_URL}/initialize_bot")
-            if init and init.status_code == 200:
-                st.rerun()
+
+# Auto-initialize bot ONCE per session
+if not st.session_state.bot_initialized and not st.session_state.bot_initializing:
+    if bot_state == "uninitialized":
+        r = safe_request(requests.get, f"{API_URL}/exchange_status")
+        st.session_state.ui_synced = False
+        if r:
+            ex = r.json()
+            if ex.get("keys_loaded"):
+                st.session_state.bot_initializing = True
+
+                init = safe_request(requests.post, f"{API_URL}/initialize_bot")
+
+                if init and init.status_code == 200:
+                    st.session_state.bot_initialized = True
+                    st.session_state.bot_initializing = False
+                    st.rerun()
+                else:
+                    st.session_state.bot_initializing = False
 
 
 config = fetch_config()
+
+# Always load backend config into local variables
 symbols = config.get("symbols", [])
 amounts_by_symbol = config.get("amounts_by_symbol", {})
-raw_pnl = config.get("pnl_perc", 0.001)
 
+# Sync UI widgets only once after backend restart
+if not st.session_state.ui_synced:
+    for i, sym in enumerate(symbols):
+        st.session_state[f"symbol_{i}"] = sym
+        st.session_state[f"amount_{i}"] = amounts_by_symbol.get(sym, 0.0)
+
+    st.session_state.ui_synced = True
+
+
+raw_pnl = config.get("pnl_perc", 0.001)
 try:
     raw_pnl = float(raw_pnl)
 except Exception:
@@ -374,21 +403,28 @@ with st.expander("⚙️ Symbols, Amounts & PnL", expanded=False):
         with cols[0]:
             symbol = st.text_input(
                 f"Symbol {i+1}",
-                value=default_symbol,
                 key=f"symbol_{i}",
                 disabled=(bot_state == "running"),
                 help="Format: BTC/USDT, BTCUSDT, BTC-USDT"
             )
 
         with cols[1]:
+            symbol_clean = symbol.strip().upper()
+            amount_disabled = (symbol_clean == "") or (bot_state == "running")
+
+            # If disabled, use min_value as the placeholder to avoid Streamlit errors
+            if amount_disabled:
+                amount_value = 0.0001
+            else:
+                amount_value = float(default_amount) if default_symbol else 0.0001
+
             amount = st.number_input(
                 f"Amount {i+1}",
                 min_value=0.0001,
-                value=float(default_amount or 1.0),
                 step=0.001,
                 format="%.3f",
                 key=f"amount_{i}",
-                disabled=(bot_state == "running"),
+                disabled=amount_disabled,
                 help="Amount in base currency (e.g., BTC for BTC/USDT)"
             )
 
@@ -440,7 +476,7 @@ with st.expander("⚙️ Symbols, Amounts & PnL", expanded=False):
     # -----------------------------------------
 
     if bot_state == "running":
-        st.caption("PnL and trading pairs are locked while the bot is running.")
+        st.caption("PnL and trading pairs are locked while the bot is running. Stop the bot first to update pairs, amounts and pnl_perc.")
 
     else:
         col_cfg1, col_cfg2 = st.columns(2)
@@ -636,7 +672,6 @@ st.caption(
     "are not included. Deposits and withdrawals are shown as flows and do not reflect margin transfers "
     "or collateral movements between wallets."
 )
-
 
 
 # -----------------------------
