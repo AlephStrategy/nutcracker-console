@@ -586,6 +586,7 @@ lookback_days = st.number_input(
     key="lookback_days"
 )
 
+# Run PnL Job
 if st.button("Run PnL Job", key="run_pnl_job"):
     r = safe_request(
         requests.post,
@@ -602,6 +603,32 @@ if st.button("Run PnL Job", key="run_pnl_job"):
         "If the PnL log does not update for more than 10 minutes, you may safely terminate the job."
     )
 
+# Read status safely
+status_resp = safe_request(requests.get, f"{API_URL}/pnl_status")
+
+status_json = {}
+if status_resp:
+    try:
+        status_json = status_resp.json()
+    except:
+        status_json = {}
+
+status_text = status_json.get("status", "unknown")
+st.caption(f"Status: {status_text}")
+
+# Auto-refresh ONLY while job is running
+RUNNING_STATES = [
+    "Fetching balances",
+    "Scanning",
+    "Fetching histories",
+    "Computing valuations",
+]
+
+if any(state in status_text for state in RUNNING_STATES):
+    time.sleep(2)
+    st.rerun()
+
+# Stop PnL Job
 if st.button("Terminate PnL Job"):
     requests.post(API_URL + "/stop_pnl")
     st.success("PnL stop requested.")
@@ -614,6 +641,7 @@ if resp and resp.json().get("timestamp"):
     st.write(f"**Last PnL log update:** {dt.strftime('%Y-%m-%d %H:%M:%S')}")
 else:
     st.write("No PnL logs found.")
+
 
 # -----------------------------
 # PnL Snapshot
