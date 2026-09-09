@@ -106,7 +106,8 @@ if access_key:
                 st.rerun()
 
 
-API_URL = "https://nutcrackerbot.com/api"
+API_URL = "https://alephstrategy.net/api"
+
 
 hide_deploy = """
 <style>
@@ -281,8 +282,12 @@ st.subheader("Bot Control")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    start_disabled = bot_state in ["uninitialized", "running", "offline", "unknown"]
+    start_disabled = bot_state in ["running", "offline", "unknown"]
     if st.button("Start Bot", key="start_bot", disabled=start_disabled):
+        # --- Ensure hydration before starting ---
+        if bot_state == "ready":
+            safe_request(requests.post, f"{API_URL}/initialize_bot")
+            time.sleep(0.6) 
         r = safe_request(requests.post, f"{API_URL}/start")
         if r:
             st.success(r.json().get("message", "No response"))
@@ -303,13 +308,17 @@ with col2:
 with col3:
     restart_disabled = bot_state in ["offline", "unknown", "uninitialized"]
     if st.button("Restart Bot", key="restart_bot", disabled=restart_disabled):
+        # Restart already rebuilds the bot, but hydration still must run
+        safe_request(requests.post, f"{API_URL}/initialize_bot")
+        time.sleep(1.0)
+
         r = safe_request(requests.post, f"{API_URL}/restart")
+
         if r:
             st.success(r.json().get("message", "No response"))
         else:
             st.error("Failed to reach server.")
         st.rerun()
-
 # -----------------------------
 # Exchange Setup
 # -----------------------------
