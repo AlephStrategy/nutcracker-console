@@ -78,7 +78,7 @@ nutcracker_img = Image.open("assets/nutcracker.png")
 st.sidebar.image(
     nutcracker_img,
     caption="Nutcracker — Aleph Strategy",
-    width="stretch"
+    width=280
 )
 # -----------------------------
 # Sidebar: Update Access Key
@@ -105,7 +105,7 @@ if access_key:
                 st.success("Access Key cleared. Please enter your new key.")
                 st.rerun()
 
-
+st.sidebar.caption("Provided AS-IS under MIT License. Trading carries financial risk.")
 API_URL = "https://alephstrategy.net/api"
 
 
